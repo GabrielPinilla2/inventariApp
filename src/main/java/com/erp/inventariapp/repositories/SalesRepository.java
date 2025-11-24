@@ -1,5 +1,4 @@
 package com.erp.inventariapp.repositories;
-
 import com.erp.inventariapp.entities.Sale;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -32,4 +31,15 @@ public interface SalesRepository extends JpaRepository<Sale, Long> {
         WHERE sp.product.id = :productId
         """)
     List<Sale> findByProductId(@Param("productId") Long productId);
+
+    /*@Query("""
+        SELECT new com.erp.inventariapp.dto.SalesChartDTO(
+            FUNCTION('MONTHNAME', s.date),
+            SUM(s.totalAmount)
+        )
+        FROM Sale s
+        GROUP BY FUNCTION('MONTH', s.date)
+        """)
+    List<com.erp.inventariapp.dto.SalesChartDTO> getMonthlySales();*/
+
 }

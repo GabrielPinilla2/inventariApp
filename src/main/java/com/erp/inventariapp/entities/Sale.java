@@ -6,7 +6,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
-import java.time.LocalDateTime;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -22,21 +22,19 @@ public class Sale {
     private Long idSale;
 
     @Column(nullable=false)
-    private LocalDateTime date;
+    private LocalDate date;
 
     @Column(nullable=false)
     private Double totalAmount;
 
-    @Column(nullable=false)
     private Double discount;
 
-    @Column(nullable=false)
     private Double tax;
 
     @Column(nullable=false)
     private Boolean state;
 
-    @Column(length=250, nullable=false)
+    @Column(length=250)
     private String observation;
 
     @ManyToOne

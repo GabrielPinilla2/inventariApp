@@ -1,5 +1,6 @@
 package com.erp.inventariapp.services;
 
+import com.erp.inventariapp.dto.SalesChartDTO;
 import com.erp.inventariapp.dto.SaleDTO;
 import com.erp.inventariapp.dto.SaleProductDTO;
 import com.erp.inventariapp.entities.Product;
@@ -36,6 +37,10 @@ public class SalesService implements ISalesService {
         this.productRepository = productRepository;
         this.salesMapper = salesMapper;
     }
+    
+    //public List<SalesChartDTO> getMonthlySales() {
+    //    return salesRepository.getMonthlySales();
+    //}
 
     @Override
     public List<SaleDTO> findAll() {
@@ -83,8 +88,16 @@ public class SalesService implements ISalesService {
     public SaleDTO update(Long idSale, SaleDTO dto) {
         Optional<Sale> optionalSale = salesRepository.findById(idSale);
         if (optionalSale.isPresent()) {
-            Sale sale = mapSaleDtoToEntity(dto);
-            return salesMapper.toDTO(salesRepository.save(sale));
+            System.out.println("Actualizando venta con ID: " + idSale);
+            Sale existingSale = optionalSale.get();
+
+            // Actualizar datos básicos
+            validateSellerAndCustomer(dto, existingSale);
+
+            // Actualizar productos y total usando la lógica de diferencia
+            sellProducts(dto, existingSale);
+
+            return salesMapper.toDTO(salesRepository.save(existingSale));
         } else {
             throw new ResourceNotFoundException("Venta no encontrada con el ID: " + idSale);
         }
@@ -101,6 +114,13 @@ public class SalesService implements ISalesService {
     private Sale mapSaleDtoToEntity(SaleDTO dto) {
         Sale sale = salesMapper.toEntity(dto);
 
+        validateSellerAndCustomer(dto, sale);
+        sellProducts(dto, sale);
+
+        return sale;
+    }
+
+    private void validateSellerAndCustomer(SaleDTO dto, Sale sale) {
         customerRepository.findById(dto.getCustomerId()).ifPresentOrElse(
                 sale::setCustomer,
                 () -> { throw new ResourceNotFoundException("Cliente " + dto.getCustomerId() + " asociado a la venta "
@@ -112,40 +132,69 @@ public class SalesService implements ISalesService {
                 () -> { throw new ResourceNotFoundException("Vendedor " + dto.getSellerId() + " asociado a la venta "
                         + dto.getSellerId() + " no fue encontrado"); }
         );
-
-        sellProducts(dto, sale);
-
-        return sale;
     }
 
     private void sellProducts(SaleDTO dto, Sale sale) {
-        List<SaleProduct> saleProducts = new ArrayList<>();
+        // Usar la lista existente para evitar problemas con orphanRemoval
+        List<SaleProduct> originalSaleProducts = sale.getSaleProducts() != null ? sale.getSaleProducts() : new ArrayList<>();
         double totalAmount = 0.0;
 
+        // Para saber qué productos ya no están en la edición
+        List<Long> dtoProductIds = dto.getProducts().stream().map(SaleProductDTO::getProductId).toList();
+
+        // Eliminar SaleProducts que ya no están en la edición y devolver stock
+        originalSaleProducts.removeIf(originalSP -> {
+            boolean toRemove = !dtoProductIds.contains(originalSP.getProduct().getIdproduct());
+            if (toRemove) {
+                Product product = originalSP.getProduct();
+                product.setStock(product.getStock() + originalSP.getQuantity());
+                productRepository.save(product);
+            }
+            return toRemove;
+        });
+
+        // Actualizar o crear SaleProduct según corresponda
         for (SaleProductDTO spDTO : dto.getProducts()) {
             Product product = productRepository.findById(spDTO.getProductId())
                     .orElseThrow(() -> new ResourceNotFoundException("Producto con ID "
                             + spDTO.getProductId() + " no fue encontrado"));
 
-            if (product.getStock() < spDTO.getQuantity()) {
+            // Buscar si ya existía este producto en la venta
+            SaleProduct originalSP = originalSaleProducts.stream()
+                .filter(sp -> sp.getProduct().getIdproduct().equals(product.getIdproduct()))
+                .findFirst().orElse(null);
+
+            int originalQty = originalSP != null ? originalSP.getQuantity() : 0;
+            int newQty = spDTO.getQuantity();
+            int diffQty = newQty - originalQty;
+
+            // Validar stock solo si se va a aumentar la cantidad
+            if (diffQty > 0 && product.getStock() < diffQty) {
                 throw new IllegalArgumentException("No hay suficiente stock para el producto: " + product.getName());
             }
 
-            product.setStock(product.getStock() - spDTO.getQuantity());
+            // Actualizar stock según la diferencia
+            product.setStock(product.getStock() - diffQty);
             productRepository.save(product);
 
-            SaleProduct saleProduct = new SaleProduct();
-            saleProduct.setSale(sale);
-            saleProduct.setProduct(product);
-            saleProduct.setQuantity(spDTO.getQuantity());
+            // Actualizar o crear SaleProduct
+            if (originalSP != null) {
+                originalSP.setQuantity(newQty);
+            } else {
+                SaleProduct saleProduct = new SaleProduct();
+                saleProduct.setSale(sale);
+                saleProduct.setProduct(product);
+                saleProduct.setQuantity(newQty);
+                originalSaleProducts.add(saleProduct);
+            }
 
-            saleProducts.add(saleProduct);
-
-            // Se multiplica el precio de cada producto * la cantidad para obtener el total de la venta
-            totalAmount += product.getPrice() * spDTO.getQuantity();
+            // Sumar al total el valor actualizado de este producto
+            totalAmount += product.getPrice() * newQty;
         }
 
+        System.out.println("Total amount: " + totalAmount);
         sale.setTotalAmount(totalAmount);
-        sale.setSaleProducts(saleProducts);
+        // No reemplazar la lista, solo modificarla
     }
+    
 }
