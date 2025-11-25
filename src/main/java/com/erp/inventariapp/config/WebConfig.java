@@ -9,8 +9,9 @@ public class WebConfig implements WebMvcConfigurer {
 
     @Override
     public void addCorsMappings(CorsRegistry registry) {
-        registry.addMapping("/api/**")
-                .allowedOrigins("https://inventariapp-front.jdav01.duckdns.org")
+        registry.addMapping("/**")
+                .allowedOrigins("http://localhost:5173")       
+                .allowedOriginPatterns("https://inventariapp-front.jdav01.duckdns.org/")
                 .allowedMethods("GET", "POST", "PUT", "DELETE", "HEAD", "PATCH", "OPTIONS")
                 .allowedHeaders("*")
                 .allowCredentials(true);
