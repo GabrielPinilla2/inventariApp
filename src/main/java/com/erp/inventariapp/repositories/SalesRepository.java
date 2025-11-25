@@ -4,7 +4,6 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
-import java.time.LocalDate;
 import java.util.List;
 
 public interface SalesRepository extends JpaRepository<Sale, Long> {
@@ -42,7 +41,5 @@ public interface SalesRepository extends JpaRepository<Sale, Long> {
         GROUP BY FUNCTION('MONTH', s.date)
         """)
     List<com.erp.inventariapp.dto.SalesChartDTO> getMonthlySales();*/
-
-    List<Sale> findByDateBetween(LocalDate start, LocalDate end);
 
 }
